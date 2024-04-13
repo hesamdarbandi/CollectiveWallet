@@ -10,9 +10,9 @@ import (
 )
 
 type Deployer struct {
-	address     common.Address
-	transaction *types.Transaction
-	contract    *contracts.Contract
+	Address     common.Address
+	Transaction *types.Transaction
+	Contract    *contracts.Contract
 }
 
 func NewDeployer() *Deployer {
@@ -32,13 +32,13 @@ func (d *Deployer) Deploy(ctx context.Context, client *ethclient.Client) error {
 	if err != nil {
 		return err
 	}
-	d.address = address
-	d.transaction = tx
-	d.contract = contract
+	d.Address = address
+	d.Transaction = tx
+	d.Contract = contract
 	return nil
 }
 
 // ContractAddress returns the contract address
 func (d *Deployer) ContractAddress() string {
-	return d.address.Hex()
+	return d.Address.Hex()
 }

@@ -12,19 +12,19 @@ const (
 )
 
 type Balance struct {
-	privateKey      string
-	contractAddress string
+	PrivateKey      string
+	ContractAddress string
 }
 
 func NewBalanceRunner(privateKey string, contractAddress string) *Balance {
 	return &Balance{
-		privateKey:      privateKey,
-		contractAddress: contractAddress,
+		PrivateKey:      privateKey,
+		ContractAddress: contractAddress,
 	}
 }
 
 func (b *Balance) GetContractBalance(ctx context.Context, client *ethclient.Client) (int64, error) {
-	value, err := client.BalanceAt(ctx, common.HexToAddress(b.contractAddress), nil)
+	value, err := client.BalanceAt(ctx, common.HexToAddress(b.ContractAddress), nil)
 	if err != nil {
 		return 0, err
 	}
