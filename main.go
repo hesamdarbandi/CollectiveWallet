@@ -1,24 +1,56 @@
 package main
 
 import (
+	"block-wallet/pkg/blockchain"
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/joho/godotenv"
 	"log"
+	"net/http"
+	"os"
+	"time"
+)
+
+const (
+	TimeOut    = "TimeOut"
+	RpcAddress = "RPC_ADDRESS"
 )
 
 func main() {
 
-	ctx := context.Background()
-	client, err := ethclient.Dial("https://rpc.ankr.com/eth_goerli")
+	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("error reading .env file %v", err)
 	}
 
-	c, err := client.NetworkID(ctx)
-	privateKey, err := crypto.HexToECDSA("330134aeeb72e159ef2d53332a0778d7534eea949b137f03a35ee34817002c1b")
+	http.HandleFunc("/deploy", handleDeploy)
 
-	fmt.Println(c)
-	fmt.Println(privateKey)
+	err = http.ListenAndServe(":8059", nil)
+	if err != nil {
+		fmt.Println("server running failed")
+	}
+}
+
+func handleDeploy(w http.ResponseWriter, r *http.Request) {
+
+	log.Println("deploying contract")
+	timeOut, err := time.ParseDuration(os.Getenv(TimeOut))
+	if err != nil {
+		log.Println(err)
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), timeOut)
+	defer cancel()
+	client, err := ethclient.DialContext(ctx, os.Getenv(RpcAddress))
+	if err != nil {
+		log.Println(err)
+	}
+	deployer := blockchain.NewDeployer()
+	err = deployer.Deploy(ctx, client)
+	if err != nil {
+		log.Println(err)
+	}
+
+	log.Printf("contract deployed at address %s\n", deployer.ContractAddress())
 }
