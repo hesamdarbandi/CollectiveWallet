@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -21,10 +22,13 @@ var (
 	ErrInvalidKey             = errors.New("invalid key")
 	ErrInvalidAddress         = errors.New("invalid address")
 	ErrInvalidContractAddress = errors.New("invalid contract address")
+	PrivateKey                = "OWNER_PRIVATE_KEY"
+	WeiFounds                 = "Wei_Founds"
+	GasLimit                  = "Gas_Limit"
 )
 
 func getSigner(ctx context.Context, client *ethclient.Client) (*bind.TransactOpts, error) {
-	privateKey, err := crypto.HexToECDSA(os.Getenv("PrivateKey"))
+	privateKey, err := crypto.HexToECDSA(os.Getenv(PrivateKey))
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +38,7 @@ func getSigner(ctx context.Context, client *ethclient.Client) (*bind.TransactOpt
 	}
 
 	address := crypto.PubkeyToAddress(*publicKey)
+	fmt.Println("from address is ", address)
 	nonce, err := client.PendingNonceAt(ctx, address)
 	if err != nil {
 		return nil, err
@@ -52,8 +57,8 @@ func getSigner(ctx context.Context, client *ethclient.Client) (*bind.TransactOpt
 	}
 
 	signer.Nonce = big.NewInt(int64(nonce))
-	signer.Value = big.NewInt(getEnvInt("WeiFounds"))
-	signer.GasLimit = uint64(getEnvInt("GasLimit"))
+	signer.Value = big.NewInt(0)
+	signer.GasLimit = uint64(getEnvInt(GasLimit))
 	signer.GasPrice = gasPrice
 
 	return signer, nil
