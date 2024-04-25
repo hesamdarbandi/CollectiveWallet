@@ -14,6 +14,8 @@ const (
 	GetAction      = "get"
 	IncreaseAction = "increase"
 	ReduceAction   = "reduce"
+	SendAction     = "send"
+	ReceiveAction  = "receive"
 )
 
 type Allowance struct {

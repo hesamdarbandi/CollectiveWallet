@@ -3,14 +3,16 @@ package main
 import (
 	"block-wallet/pkg/blockchain"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/joho/godotenv"
+	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -18,6 +20,12 @@ const (
 	TimeOut    = "TimeOut"
 	RpcAddress = "RPC_ADDRESS"
 )
+
+type AllowanceRequest struct {
+	Address string  `json:"address"`
+	Action  string  `json:"action"`
+	Amount  big.Int `json:"amount"`
+}
 
 var (
 	ErrInvalidAllowanceAction = errors.New("invalid allowance action")
@@ -31,6 +39,16 @@ var allowanceActions = map[string]struct{}{
 	"reduce":   {},
 }
 
+var transferActions = map[string]struct{}{
+	"send":    {},
+	"receive": {},
+}
+
+var ownershipActions = map[string]struct{}{
+	"get":      {},
+	"transfer": {},
+}
+
 func main() {
 
 	err := godotenv.Load(".env")
@@ -40,6 +58,8 @@ func main() {
 
 	http.HandleFunc("/deploy", handleDeploy)
 	http.HandleFunc("/allowance", handleAllowance)
+	http.HandleFunc("/transfer", HandleTransfer)
+	http.HandleFunc("/ownership", HandleOwnerShip)
 
 	err = http.ListenAndServe(":8059", nil)
 	if err != nil {
@@ -47,19 +67,137 @@ func main() {
 	}
 }
 
-func handleAllowance(w http.ResponseWriter, r *http.Request) {
+func HandleOwnerShip(w http.ResponseWriter, r *http.Request) {
 
-	log.Println("handle allowance request")
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err)
+	}
 
-	action := r.Header.Get(RpcAddress)
-	targetAddress := r.Header.Get("sdf")
-	amount, _ := strconv.ParseInt("3", 18, 64)
+	var request map[string]interface{}
+	err = json.Unmarshal(body, &request)
+	if err != nil {
+		log.Println(err)
+	}
+
+	action := request["action"].(string)
+	targetAddress := request["address"].(string)
+
+	if _, ok := ownershipActions[action]; !ok {
+		log.Println("invalid action")
+	}
 
 	timeOut, err := time.ParseDuration(os.Getenv(TimeOut))
 	if err != nil {
 		log.Println(err)
 	}
-	if _, ok := allowanceActions[r.Header.Get(RpcAddress)]; !ok {
+
+	ctxCall, cancel := context.WithTimeout(r.Context(), timeOut)
+	defer cancel()
+	client, err := ethclient.DialContext(ctxCall, os.Getenv("WEBSOCKET_ADDRESS"))
+	if err != nil {
+		log.Println(err)
+	}
+	runner := blockchain.NewOwnerRunner(os.Getenv("OWNER_PRIVATE_KEY"), os.Getenv("RPC_ADDRESS"))
+
+	switch action {
+	case blockchain.GetAction:
+		owner, err := runner.GetOwner(r.Context(), client)
+		if err != nil {
+			log.Println(err)
+		}
+		fmt.Printf("Current owner address is %s\n", owner)
+	default:
+		if targetAddress == "" {
+			log.Println("target address is empty")
+		}
+		err = runner.TransferOwner(r.Context(), client, targetAddress)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	log.Println("onwership is done")
+}
+
+func HandleTransfer(w http.ResponseWriter, r *http.Request) {
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err)
+	}
+
+	var request map[string]interface{}
+	err = json.Unmarshal(body, &request)
+	if err != nil {
+		log.Println(err)
+	}
+
+	action := request["action"].(string)
+	amount := request["amount"].(int64)
+	targetAddress := request["address"].(string)
+
+	if _, ok := transferActions[action]; !ok {
+		log.Println(ErrInvalidAllowanceAction)
+	}
+
+	timeOut, err := time.ParseDuration(os.Getenv(TimeOut))
+	if err != nil {
+		log.Println(err)
+	}
+
+	ctxCall, cancel := context.WithTimeout(r.Context(), timeOut)
+	defer cancel()
+	client, err := ethclient.DialContext(ctxCall, os.Getenv("WEBSOCKET_ADDRESS"))
+	if err != nil {
+		log.Println(err)
+	}
+	runner := blockchain.NewTransfersRunner(os.Getenv("OWNER_PRIVATE_KEY"), os.Getenv("RPC_ADDRESS"))
+
+	if amount <= 0 {
+		log.Println(ErrInvalidAllowanceAmount)
+	}
+
+	switch action {
+	case blockchain.SendAction:
+		if targetAddress == "" {
+			log.Println("target address is empty")
+		}
+		err = runner.Send(r.Context(), client, targetAddress, amount)
+	case blockchain.ReceiveAction:
+		err = runner.Receive(r.Context(), client, amount)
+	}
+	if err != nil {
+		log.Println(err)
+	}
+
+	log.Println("transfer done")
+}
+
+func handleAllowance(w http.ResponseWriter, r *http.Request) {
+
+	log.Println("handle allowance request")
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err)
+	}
+
+	var request map[string]interface{}
+	err = json.Unmarshal(body, &request)
+	if err != nil {
+		log.Println(err)
+	}
+
+	action := request["action"].(string)
+	targetAddress := request["targetAddress"].(string)
+	amount, _ := request["amount"].(int64)
+
+	timeOut, err := time.ParseDuration(os.Getenv(TimeOut))
+	if err != nil {
+		log.Println(err)
+	}
+	if _, ok := allowanceActions[action]; !ok {
 		log.Println(ErrInvalidAllowanceAction)
 	}
 
